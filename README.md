@@ -7,10 +7,10 @@ Simple python program to detect current active YouTube video url and perform AI 
 
 It works by extracting frames from the YouTube video (1 FPS), then applying:
 
-1. GantMan/nsfw_model - general 5-class classifier
+1. [GantMan/nsfw_model](https://github.com/GantMan/nsfw_model) - general 5-class classifier
 (drawings, hentai, neutral, porn, sexy)
 
-2. notAI-tech/NudeNet - region-based nudity detector
+2. [notAI-tech/NudeNet](https://github.com/notAI-tech/NudeNet ) - region-based nudity detector
 (breasts exposed, genitalia exposed, armpits, feet, etc.)
 
 Finally, results are aggregated into a final warning level.
@@ -18,12 +18,12 @@ Finally, results are aggregated into a final warning level.
 # Directory Structure
 ```
 YouTubeNNNAnalyzer/
-│── nnn.py                   # YoutubeNNNAnalyzer class
-│── main.py                  # Example usage with active browser URL
-│── requirements.txt
-│── README.md
-│── nsfw_model/              # Pretrained and modified MobileNetV2 GantMan/nsfw_model
-│── temp_frames/             # Temporary extraction directory (auto-cleaned)
+├─ nsfw_model/              # Pretrained and modified MobileNetV2 GantMan/nsfw_model
+├─ README.md
+├─ main.py                  # Example usage with active browser URL
+├─ nnn.py                   # YoutubeNNNAnalyzer class
+├─ requirements.txt
+└─ temp_frames/             # Temporary extraction directory (auto-cleaned)
 ```
 
 # Installation
