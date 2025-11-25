@@ -17,7 +17,7 @@ class YoutubeNNNAnalyzer:
         - 2 = high warning
     '''
 
-    def __init__(self, model_path='nsfw_model/mobilenet_v2_140_224/saved_model.h5'):
+    def __init__(self, model_path='YouTubeNNNAnalyzer/nsfw_model/mobilenet_v2_140_224/saved_model.h5'):
         self.nsfw_model = predict.load_model(model_path)
         self.nude_detector = NudeDetector()
 
@@ -95,11 +95,6 @@ class YoutubeNNNAnalyzer:
                 os.remove(frame_path)
                 continue
 
-            # Rename for readability
-            conf = info[frame_class]
-            new_name = f'[{frame_class}_{conf:.2f}]_{os.path.basename(frame_path)}'
-            os.rename(frame_path, os.path.join(directory, new_name))
-
         return result
 
     # Step 3: notAI-tech/NudeNet area detection
@@ -108,7 +103,7 @@ class YoutubeNNNAnalyzer:
         return self.nude_detector.detect_batch(frames)
 
     # Step 4: Handle warning logic -> output 0/1/2
-    def compute_warning_level(self, directory, nsfw_result, region_result):
+    def compute_warning_level(self, nsfw_result, region_result):
         logged_frames = len(nsfw_result)
         if logged_frames == 0:
             return 0
@@ -116,11 +111,8 @@ class YoutubeNNNAnalyzer:
         moderate_count = 0
         high_count = 0
 
-        frame_files = sorted(os.listdir(directory))  # Ensure correct alignment
-
-        for i, frame_name in enumerate(frame_files):
-            detections = region_result[i]
-            labels = {d['class'] for d in detections}
+        for detection in region_result:
+            labels = {d['class'] for d in detection}
 
             if labels & self.high_warning_labels:
                 high_count += 1
@@ -168,7 +160,7 @@ class YoutubeNNNAnalyzer:
         if not video_id:
             return 0
 
-        output_dir = f'nnn/temp_frames/{video_id}'
+        output_dir = f'YouTubeNNNAnalyzer/temp_frames/{video_id}'
 
         # Step 1: extract frames
         out = self.extract_frames(video_id, output_dir, target_fps=1)
@@ -182,7 +174,7 @@ class YoutubeNNNAnalyzer:
         region_result = self.detect_areas(output_dir)
 
         # Step 4: Compute warning level
-        level = self.compute_warning_level(output_dir, nsfw_result, region_result)
+        level = self.compute_warning_level(nsfw_result, region_result)
 
         # Cleanup
         shutil.rmtree(output_dir)

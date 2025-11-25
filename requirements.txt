@@ -2,7 +2,7 @@ opencv-python
 yt-dlp
 uiautomation
 nudenet
-tensorflow>=2.2.0
-tensorflow-hub==0.12.0
+tensorflow
+tensorflow-hub
 pillow
 numpy
