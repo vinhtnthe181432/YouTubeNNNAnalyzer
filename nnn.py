@@ -1,11 +1,15 @@
 import os
 import shutil
 import re
-import cv2
+import cv2 as cv
 import yt_dlp
 from urllib.parse import urlparse, parse_qs
 
 from nsfw_model.nsfw_detector import predict
+try:
+    nsfw_model = predict.load_model('YouTubeNNNAnalyzer/nsfw_model/mobilenet_v2_140_224/saved_model.h5')
+except:
+    nsfw_model = predict.load_model('nsfw_model/mobilenet_v2_140_224/saved_model.h5')
 from nudenet import NudeDetector
 
 
@@ -17,8 +21,8 @@ class YoutubeNNNAnalyzer:
         - 2 = high warning
     '''
 
-    def __init__(self, model_path='YouTubeNNNAnalyzer/nsfw_model/mobilenet_v2_140_224/saved_model.h5'):
-        self.nsfw_model = predict.load_model(model_path)
+    def __init__(self):
+        self.nsfw_model = nsfw_model
         self.nude_detector = NudeDetector()
 
         self.high_warning_labels = {
@@ -30,22 +34,22 @@ class YoutubeNNNAnalyzer:
         }
 
         self.moderate_warning_labels = {
-            'FEMALE_GENITALIA_COVERED',
-            'FEET_EXPOSED',
-            'ARMPITS_EXPOSED',
-            'BELLY_EXPOSED',
-            'FEMALE_BREAST_COVERED',
-            'BUTTOCKS_COVERED'
+            "FEMALE_GENITALIA_COVERED",
+            "FEMALE_BREAST_COVERED",
+            "BUTTOCKS_COVERED",
+            "BELLY_EXPOSED",
+        #   "ARMPITS_EXPOSED",
+        #   "FEET_EXPOSED"
         }
 
     # Step 1: Download frames from YouTube video (1 FPS)
     @staticmethod
-    def extract_frames(video_id, output_dir, target_fps=1):
+    def extract_frames(video_id, output_dir, max_frames=300):
         youtube_url = f'https://youtube.com/watch?v={video_id}'
 
         ydl_opts = {
             'url': youtube_url,
-            'format': 'bestvideo[ext=mp4][height<360]/bestvideo[ext=mp4]/bestvideo',
+            'format': 'bestvideo[ext=mp4][height<=360][fps<=30]/bestvideo[height<=360][fps<=30]/bestvideo',
             'quiet': True,
         }
 
@@ -53,32 +57,39 @@ class YoutubeNNNAnalyzer:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(youtube_url, download=False)
                 video_url = info.get('url', info.get('formats', [{}])[0].get('url'))
+                video_duration = info.get('duration', 0)
         except Exception:
             return None
 
         if not video_url:
             return None
 
-        cap = cv2.VideoCapture(video_url)
+        cap = cv.VideoCapture(video_url)
         if not cap.isOpened():
             return None
 
         os.makedirs(output_dir, exist_ok=True)
 
-        fps = cap.get(cv2.CAP_PROP_FPS) or 30
-        frame_step = int(fps / target_fps)
+        if video_duration <= 0:
+            video_duration = 300
 
-        count = 0
+        sample_interval = max(1, video_duration / max_frames)
+        next_captured_timestamp = 0
+
         while True:
             ret, frame = cap.read()
             if not ret:
                 break
 
-            if count % frame_step == 0:
-                frame_path = os.path.join(output_dir, f'frame_{count}.jpg')
-                cv2.imwrite(frame_path, frame)
+            timestamp = cap.get(cv.CAP_PROP_POS_MSEC) / 1000
 
-            count += 1
+            if timestamp >= next_captured_timestamp:
+                frame_path = os.path.join(output_dir, f'{int(timestamp//60)}.{int(timestamp%60)}.jpg')
+                cv.imwrite(frame_path, frame)
+                next_captured_timestamp += sample_interval
+
+            if next_captured_timestamp >= video_duration:
+                break
 
         cap.release()
         return output_dir
@@ -97,10 +108,55 @@ class YoutubeNNNAnalyzer:
 
         return result
 
-    # Step 3: notAI-tech/NudeNet area detection
-    def detect_areas(self, directory):
+    # Step 3: notAI-tech/NudeNet area detection (with evidence image and bounding box saved)
+    def draw_box(img, detection, box_color):
+        box = detection['box']
+        x, y, h, w = box[0], box[1], box[2], box[3]
+        img = cv.rectangle(img, (x, y), (x+h, y+w), box_color, 1)
+                
+        label = str(f'{detection['class']} - {detection['score']*100:.1f}%')
+        font = cv.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.5
+        font_thickness = 1
+
+        (label_width, label_height), baseline = cv.getTextSize(label, font, font_scale, font_thickness)
+        cv.rectangle(img, (x, y - label_height - baseline), (x + label_width, y), box_color, -1)
+
+        cv.putText(
+            img = img, 
+            text = label, 
+            org = (x, y - 2),
+            fontFace = font,
+            fontScale = font_scale,
+            color = (255, 255, 255),
+            thickness = font_thickness,
+            lineType = cv.LINE_AA
+        )
+        return img
+
+    def detect_areas(directory):
         frames = [os.path.join(directory, f) for f in os.listdir(directory)]
-        return self.nude_detector.detect_batch(frames)
+        detection_result = nude_detector.detect_batch(frames)
+
+        for i, frame_path in enumerate(frames):
+            high_warning = 0
+            moderate_warning = 0
+            img = cv.cvtColor(cv.imread(frame_path), cv.COLOR_BGR2RGB)
+            
+            for detection in detection_result[i]:
+                if detection['class'] in high_warning_labels:
+                    img = draw_box(img, detection, (255, 0, 0))
+                    high_warning = 1
+                elif detection['class'] in moderate_warning_labels:
+                    img = draw_box(img, detection, (255, 165, 0))
+                    moderate_warning = 1
+
+            if high_warning == moderate_warning == 0:
+                os.remove(frame_path)
+            else:
+                cv.imwrite(frame_path, cv.cvtColor(img, cv.COLOR_BGR2RGB))
+        
+        return detection_result
 
     # Step 4: Handle warning logic -> output 0/1/2
     def compute_warning_level(self, nsfw_result, region_result):
@@ -122,7 +178,7 @@ class YoutubeNNNAnalyzer:
         # Ratio threshold
         if high_count >= logged_frames * 0.01:
             return 2
-        if moderate_count >= logged_frames * 0.01:
+        if moderate_count >= logged_frames * 0.03:
             return 1
 
         return 0
@@ -160,7 +216,7 @@ class YoutubeNNNAnalyzer:
         if not video_id:
             return 0
 
-        output_dir = f'YouTubeNNNAnalyzer/temp_frames/{video_id}'
+        output_dir = f'temp_frames/{video_id}'
 
         # Step 1: extract frames
         out = self.extract_frames(video_id, output_dir, target_fps=1)
