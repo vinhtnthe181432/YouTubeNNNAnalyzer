@@ -219,7 +219,7 @@ class YoutubeNNNAnalyzer:
         output_dir = f'temp_frames/{video_id}'
 
         # Step 1: extract frames
-        out = self.extract_frames(video_id, output_dir, target_fps=1)
+        out = self.extract_frames(video_id, output_dir, max_frames=300)
         if not out:
             return 0
 
