@@ -5,11 +5,11 @@ import cv2 as cv
 import yt_dlp
 from urllib.parse import urlparse, parse_qs
 
-from nsfw_model.nsfw_detector import predict
+from nsfw_model import predict
 try:
-    nsfw_model = predict.load_model('YouTubeNNNAnalyzer/nsfw_model/mobilenet_v2_140_224/saved_model.h5')
+    nsfw_model = predict.load_model('YouTubeNNNAnalyzer/nsfw_model/mobilenet_v2_140_224.h5')
 except:
-    nsfw_model = predict.load_model('nsfw_model/mobilenet_v2_140_224/saved_model.h5')
+    nsfw_model = predict.load_model('nsfw_model/mobilenet_v2_140_224.h5')
 from nudenet import NudeDetector
 
 
@@ -109,7 +109,7 @@ class YoutubeNNNAnalyzer:
         return result
 
     # Step 3: notAI-tech/NudeNet area detection (with evidence image and bounding box saved)
-    def draw_box(img, detection, box_color):
+    def draw_box(self, img, detection, box_color):
         box = detection['box']
         x, y, h, w = box[0], box[1], box[2], box[3]
         img = cv.rectangle(img, (x, y), (x+h, y+w), box_color, 1)
@@ -134,9 +134,9 @@ class YoutubeNNNAnalyzer:
         )
         return img
 
-    def detect_areas(directory):
+    def detect_areas(self, directory):
         frames = [os.path.join(directory, f) for f in os.listdir(directory)]
-        detection_result = nude_detector.detect_batch(frames)
+        detection_result = self.nude_detector.detect_batch(frames)
 
         for i, frame_path in enumerate(frames):
             high_warning = 0
@@ -144,11 +144,11 @@ class YoutubeNNNAnalyzer:
             img = cv.cvtColor(cv.imread(frame_path), cv.COLOR_BGR2RGB)
             
             for detection in detection_result[i]:
-                if detection['class'] in high_warning_labels:
-                    img = draw_box(img, detection, (255, 0, 0))
+                if detection['class'] in self.high_warning_labels:
+                    img = self.draw_box(img, detection, (255, 0, 0))
                     high_warning = 1
-                elif detection['class'] in moderate_warning_labels:
-                    img = draw_box(img, detection, (255, 165, 0))
+                elif detection['class'] in self.moderate_warning_labels:
+                    img = self.draw_box(img, detection, (255, 165, 0))
                     moderate_warning = 1
 
             if high_warning == moderate_warning == 0:
