@@ -5,7 +5,7 @@ Simple python program to detect current active YouTube video url and perform AI 
 - 1 -> Moderate Risk (Sexy, lewd content)
 - 2 -> High Risk (nudity / pornographic content)
 
-It works by extracting frames from the YouTube video (1 FPS), then applying:
+It works by extracting frames from the YouTube video (1 FPS if video length less than 300 seconds, and 300 frames max if longer), then applying:
 
 1. [GantMan/nsfw_model](https://github.com/GantMan/nsfw_model) - general 5-class classifier
 (drawings, hentai, neutral, porn, sexy)
